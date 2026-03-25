@@ -47,11 +47,12 @@ fun GroupDetailScreen(
     onBack: () -> Unit
 ) {
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
-    val currentUserName = FirebaseAuth.getInstance().currentUser?.displayName ?: "Student"
-
+    
     val uiState by groupViewModel.uiState.collectAsState()
     val allGroups by groupViewModel.allGroups.collectAsState()
     val appConfig by mainViewModel.appConfig.collectAsState()
+    val userProfile by groupViewModel.currentUserProfile.collectAsState()
+    
     val group = allGroups.find { it.groupId == groupId }
 
     val announcementsFlow = remember(groupId) { groupViewModel.getAnnouncementsFlow(groupId) }
@@ -60,17 +61,29 @@ fun GroupDetailScreen(
     val isMember = group?.memberIds?.contains(currentUserId) == true
     val isAdmin  = group?.adminId == currentUserId
 
+    // Use name from profile if available, fallback to Auth display name, then "Student"
+    val displayName = userProfile?.name ?: FirebaseAuth.getInstance().currentUser?.displayName ?: "Student"
+
     var announcementText by remember { mutableStateOf("") }
     var showLeaveDialog  by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showEditDialog   by remember { mutableStateOf(false) }
 
     if (uiState is GroupUiState.Loading) LoadingOverlay("Processing...")
+    
+    // Suppress popups for "disabled" errors, use inline UI instead
     if (uiState is GroupUiState.Error) {
-        ErrorDialog(
-            message = (uiState as GroupUiState.Error).message,
-            onDismiss = groupViewModel::resetState
-        )
+        val errorMessage = (uiState as GroupUiState.Error).message
+        if (!errorMessage.contains("disabled by the admin", ignoreCase = true)) {
+            ErrorDialog(
+                message = errorMessage,
+                onDismiss = groupViewModel::resetState
+            )
+        } else {
+            LaunchedEffect(uiState) {
+                groupViewModel.resetState()
+            }
+        }
     }
 
     if (showLeaveDialog) {
@@ -178,7 +191,7 @@ fun GroupDetailScreen(
                                         Announcement(
                                             groupId    = groupId,
                                             authorId   = currentUserId,
-                                            authorName = currentUserName,
+                                            authorName = displayName,
                                             content    = announcementText.trim()
                                         )
                                     )
@@ -347,19 +360,25 @@ private fun JoinSection(group: StudyGroup, isEnabled: Boolean, viewModel: GroupV
         } else if (!isEnabled) {
             Surface(
                 color = MaterialTheme.colorScheme.errorContainer,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(Modifier.width(16.dp))
                     Text(
-                        "Joining groups is currently disabled.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer
+                        text = "Joining groups is currently disabled by the administrator.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
