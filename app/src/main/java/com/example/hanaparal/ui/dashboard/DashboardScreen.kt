@@ -21,6 +21,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.hanaparal.auth.GoogleAuthUiClient
 import com.example.hanaparal.ui.components.ConfirmDialog
 import com.example.hanaparal.ui.components.rememberBiometricLauncher
+import com.example.hanaparal.ui.profile.ProfileViewModel
 import com.example.hanaparal.viewmodel.AuthViewModel
 import com.example.hanaparal.viewmodel.GroupViewModel
 import com.example.hanaparal.viewmodel.MainViewModel
@@ -32,6 +33,7 @@ fun DashboardScreen(
     googleAuthUiClient: GoogleAuthUiClient,
     authViewModel: AuthViewModel,
     mainViewModel: MainViewModel = viewModel(),
+    profileViewModel: ProfileViewModel = viewModel(),
     onNavigateToProfile: () -> Unit,
     onNavigateToGroups: () -> Unit,
     onNavigateToGroupDetail: (String) -> Unit,
@@ -42,10 +44,16 @@ fun DashboardScreen(
     val groupViewModel: GroupViewModel = viewModel()
     val myGroups by groupViewModel.myGroups.collectAsState()
     val appConfig by mainViewModel.appConfig.collectAsState()
+    val profile by profileViewModel.profile.collectAsState()
+    
     var showSignOutDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     val user = googleAuthUiClient.getSignedInUser()
+    
+    // Use Firestore profile name if available, otherwise fallback to Google username
+    val displayName = profile?.name?.ifBlank { user?.username } ?: user?.username ?: "Student"
+    
     val isSuperuser = remember(appConfig.superuserEmails, user) {
         val userEmail = user?.email?.lowercase() ?: ""
         appConfig.superuserEmails.any { it.lowercase() == userEmail }
@@ -54,7 +62,19 @@ fun DashboardScreen(
     val biometricLauncher = rememberBiometricLauncher(
         title = "Admin Authentication",
         subtitle = "Authenticate to access superuser settings",
-        onSuccess = { onNavigateToAdmin() },
+        onSuccess = { 
+            // Auto-enable features on successful admin biometric auth
+            val updatedConfig = appConfig.copy(
+                isGroupCreationEnabled = true,
+                isJoiningGroupsEnabled = true
+            )
+            mainViewModel.updateConfig(updatedConfig) { success ->
+                if (success) {
+                    Toast.makeText(context, "Group creation & joining enabled", Toast.LENGTH_SHORT).show()
+                }
+            }
+            onNavigateToAdmin() 
+        },
         onError = { _, err -> Toast.makeText(context, err, Toast.LENGTH_SHORT).show() }
     )
 
@@ -80,13 +100,11 @@ fun DashboardScreen(
                 title = {
                     Column {
                         Text("HanapAral", fontWeight = FontWeight.Bold)
-                        user?.username?.let {
-                            Text(
-                                text = "Hello, $it 👋",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
+                        Text(
+                            text = "Hello, $displayName 👋",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     }
                 },
                 actions = {
