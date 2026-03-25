@@ -76,3 +76,45 @@ fun buildPromptInfo(
         .build()
 }
 
+// ── Composable helper ─────────────────────────────────────────────────────────
+
+fun Context.findActivity(): FragmentActivity? {
+    var context = this
+    while (context is ContextWrapper) {
+        if (context is FragmentActivity) return context
+        context = context.baseContext
+    }
+    return null
+}
+
+@Composable
+fun rememberBiometricLauncher(
+    title: String = "Verify Identity",
+    subtitle: String = "Use biometrics to continue",
+    onSuccess: () -> Unit,
+    onError: (Int, String) -> Unit = { _, _ -> },
+    onFailed: () -> Unit = {}
+): () -> Unit {
+    val context = LocalContext.current
+    return remember(context, title, subtitle, onSuccess, onError, onFailed) {
+        {
+            val activity = context.findActivity()
+                ?: error("BiometricPrompt requires a FragmentActivity context")
+
+            val availability = checkBiometricAvailability(context)
+            if (availability != BiometricAvailability.AVAILABLE) {
+                onError(-1, "Biometric authentication unavailable: $availability")
+            } else {
+                val prompt = buildBiometricPrompt(
+                    activity = activity,
+                    onSuccess = onSuccess,
+                    onError = onError,
+                    onFailed = onFailed
+                )
+                val promptInfo = buildPromptInfo(title, subtitle)
+                prompt.authenticate(promptInfo)
+            }
+        }
+    }
+}
+
