@@ -53,7 +53,7 @@ private val DarkColors = darkColorScheme(
 @Composable
 fun HanapAralTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
+    // Dynamic color available on Android 12+; falls back to brand palette on older devices
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
