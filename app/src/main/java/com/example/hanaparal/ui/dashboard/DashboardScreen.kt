@@ -50,3 +50,144 @@ fun DashboardScreen(
         val userEmail = user?.email?.lowercase() ?: ""
         appConfig.superuserEmails.any { it.lowercase() == userEmail }
     }
+
+    val biometricLauncher = rememberBiometricLauncher(
+        title = "Admin Authentication",
+        subtitle = "Authenticate to access superuser settings",
+        onSuccess = { onNavigateToAdmin() },
+        onError = { _, err -> Toast.makeText(context, err, Toast.LENGTH_SHORT).show() }
+    )
+
+    if (showSignOutDialog) {
+        ConfirmDialog(
+            title = "Sign Out",
+            message = "Are you sure you want to sign out?",
+            confirmLabel = "Sign Out",
+            onConfirm = {
+                showSignOutDialog = false
+                scope.launch {
+                    googleAuthUiClient.signOut()
+                    authViewModel.signOut(onSignOut)
+                }
+            },
+            onDismiss = { showSignOutDialog = false }
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("HanapAral", fontWeight = FontWeight.Bold)
+                        user?.username?.let {
+                            Text(
+                                text = "Hello, $it 👋",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    // Always show search for visibility
+                    IconButton(onClick = onNavigateToGroups) {
+                        Icon(Icons.Default.Search, contentDescription = "Find Groups")
+                    }
+                    if (isSuperuser) {
+                        IconButton(onClick = { biometricLauncher() }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Admin Settings")
+                        }
+                    }
+                    IconButton(onClick = onNavigateToProfile) {
+                        Icon(Icons.Default.Person, contentDescription = "Profile")
+                    }
+                    IconButton(onClick = { showSignOutDialog = true }) {
+                        Icon(Icons.Default.ExitToApp, contentDescription = "Sign Out")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = onNavigateToGroups,
+                icon = { Icon(Icons.Default.Search, contentDescription = null) },
+                text = { Text("Find Groups") },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "📢 Announcement",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = appConfig.globalAnnouncementHeader,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+
+            item {
+                Text(
+                    text = "My Study Groups",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
+            if (myGroups.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "📚", style = MaterialTheme.typography.displayLarge)
+                            Spacer(Modifier.height(12.dp))
+                            Text(text = "No groups yet", style = MaterialTheme.typography.titleMedium)
+                            Text(text = "Tap 'Find Groups' to join or create one", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            } else {
+                items(myGroups, key = { it.groupId }) { group ->
+                    GroupCard(
+                        group = group,
+                        onClick = { onNavigateToGroupDetail(group.groupId) }
+                    )
+                }
+            }
+            item { Spacer(Modifier.height(88.dp)) }
+        }
+    }
+}
