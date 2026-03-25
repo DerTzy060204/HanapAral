@@ -3,11 +3,9 @@ package com.example.hanaparal.ui.studygroup
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -18,23 +16,23 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.hanaparal.data.model.StudyGroup
 import com.example.hanaparal.ui.components.ErrorDialog
 import com.example.hanaparal.ui.components.LoadingOverlay
 import com.example.hanaparal.ui.dashboard.GroupCard
 import com.example.hanaparal.viewmodel.GroupUiState
 import com.example.hanaparal.viewmodel.GroupViewModel
+import com.example.hanaparal.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupListScreen(
     groupViewModel: GroupViewModel,
+    mainViewModel: MainViewModel = viewModel(),
     onGroupClick: (String) -> Unit,
     onCreateGroup: () -> Unit,
     onBack: () -> Unit
@@ -81,6 +79,7 @@ fun GroupListScreen(
             )
         },
         floatingActionButton = {
+            // Button is now always visible so users can see the "Disabled" screen and Admins can unlock it
             ExtendedFloatingActionButton(
                 onClick = onCreateGroup,
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -99,7 +98,6 @@ fun GroupListScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // ── Enhanced Search bar ─────────────────────────────────────────────
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
