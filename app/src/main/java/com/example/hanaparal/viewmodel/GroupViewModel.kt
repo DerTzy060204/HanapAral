@@ -5,10 +5,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hanaparal.data.model.Announcement
+import com.example.hanaparal.data.model.StudentProfile
 import com.example.hanaparal.data.model.StudyGroup
 import com.example.hanaparal.data.repository.FirestoreRepository
 import com.google.firebase.auth.FirebaseAuth
@@ -28,6 +30,8 @@ class GroupViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: FirestoreRepository = FirestoreRepository()
     private val auth = FirebaseAuth.getInstance()
+    
+    private var currentAppConfig = AppConfig()
 
     private val _userIdFlow = MutableStateFlow(auth.currentUser?.uid ?: "")
 
@@ -35,31 +39,62 @@ class GroupViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<GroupUiState> = _uiState.asStateFlow()
 
     val allGroups: StateFlow<List<StudyGroup>> = repository.observeAllGroups()
+        .catch { e -> 
+            Log.e("GroupViewModel", "Error observing all groups: ${e.message}")
+            emit(emptyList()) 
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val myGroups: StateFlow<List<StudyGroup>> = _userIdFlow
         .flatMapLatest { uid ->
             if (uid.isEmpty()) flowOf(emptyList())
-            else repository.observeUserGroups(uid)
+            else repository.observeUserGroups(uid).catch { emit(emptyList()) }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val currentUserProfile: StateFlow<StudentProfile?> = _userIdFlow
+        .flatMapLatest { uid ->
+            if (uid.isEmpty()) flowOf(null)
+            else repository.observeProfile(uid).catch { emit(null) }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
         auth.addAuthStateListener { firebaseAuth ->
             _userIdFlow.value = firebaseAuth.currentUser?.uid ?: ""
         }
+        
+        viewModelScope.launch {
+            repository.observeAppConfig()
+                .catch { e -> Log.e("GroupViewModel", "Error observing config: ${e.message}") }
+                .collect { config ->
+                    if (config != null) {
+                        currentAppConfig = config
+                    }
+                }
+        }
     }
 
     fun joinGroup(groupId: String, groupName: String = "the group") {
+        if (!currentAppConfig.isJoiningGroupsEnabled) {
+            _uiState.value = GroupUiState.Error("Joining groups is currently disabled by the admin.")
+            return
+        }
+
         val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
             _uiState.value = GroupUiState.Loading
+            
+            // Get user's name for the notification
+            val userName = currentUserProfile.value?.name ?: auth.currentUser?.displayName ?: "Student"
+            
             repository.joinGroup(groupId, uid).fold(
                 onSuccess = {
                     FirebaseMessaging.getInstance().subscribeToTopic("group_$groupId")
                     _uiState.value = GroupUiState.Success
-                    showLocalJoinNotification(groupName)
+                    showLocalJoinNotification(groupName, userName)
                 },
                 onFailure = { e ->
                     _uiState.value = GroupUiState.Error(e.message ?: "Failed to join group")
@@ -68,7 +103,7 @@ class GroupViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun showLocalJoinNotification(groupName: String) {
+    private fun showLocalJoinNotification(groupName: String, userName: String) {
         val context = getApplication<Application>()
         val channelId = "group_join_channel"
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -81,7 +116,7 @@ class GroupViewModel(application: Application) : AndroidViewModel(application) {
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle("Group Joined!")
-            .setContentText("You are now a member of $groupName.")
+            .setContentText("$userName, you are now a member of $groupName.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()
@@ -89,7 +124,12 @@ class GroupViewModel(application: Application) : AndroidViewModel(application) {
         notificationManager.notify(System.currentTimeMillis().toInt(), notification)
     }
 
-    fun createGroup(group: StudyGroup, onSuccess: (String) -> Unit) {
+    fun createGroup(group: StudyGroup, bypassConfig: Boolean = false, onSuccess: (String) -> Unit) {
+        if (!currentAppConfig.isGroupCreationEnabled && !bypassConfig) {
+            _uiState.value = GroupUiState.Error("Group creation is currently disabled by the admin.")
+            return
+        }
+
         val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
             _uiState.value = GroupUiState.Loading
@@ -145,7 +185,9 @@ class GroupViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun getAnnouncementsFlow(groupId: String): StateFlow<List<Announcement>> =
-        repository.observeAnnouncements(groupId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        repository.observeAnnouncements(groupId)
+            .catch { emit(emptyList()) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun postAnnouncement(announcement: Announcement) {
         viewModelScope.launch { repository.postAnnouncement(announcement) }
