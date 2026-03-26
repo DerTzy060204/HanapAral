@@ -18,6 +18,7 @@ import com.example.hanaparal.data.model.StudentProfile
 import com.example.hanaparal.ui.components.ErrorDialog
 import com.example.hanaparal.ui.components.LoadingOverlay
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.messaging.FirebaseMessaging
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -153,17 +154,23 @@ fun ProfileScreen(
             Button(
                 onClick = {
                     val uid = currentUser?.uid ?: return@Button
-                    viewModel.saveProfile(
-                        StudentProfile(
-                            userId    = uid,
-                            name      = name.trim(),
-                            email     = currentUser.email ?: "",
-                            course    = course.trim(),
-                            yearLevel = yearLevel.toIntOrNull() ?: 1,
-                            photoUrl  = currentUser.photoUrl?.toString() ?: "",
-                            bio       = bio.trim()
+                    
+                    FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                        val token = if (task.isSuccessful) task.result else ""
+                        
+                        viewModel.saveProfile(
+                            StudentProfile(
+                                userId    = uid,
+                                name      = name.trim(),
+                                email     = currentUser.email ?: "",
+                                course    = course.trim(),
+                                yearLevel = yearLevel.toIntOrNull() ?: 1,
+                                photoUrl  = currentUser.photoUrl?.toString() ?: "",
+                                bio       = bio.trim(),
+                                fcmToken  = token
+                            )
                         )
-                    )
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
