@@ -3,6 +3,7 @@ package com.example.hanaparal
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,6 +23,8 @@ import com.example.hanaparal.ui.theme.HanapAralTheme
 import com.example.hanaparal.viewmodel.AuthViewModel
 import com.example.hanaparal.viewmodel.MainViewModel
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.firebase.installations.FirebaseInstallations
+import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : FragmentActivity() {
 
@@ -43,6 +46,25 @@ class MainActivity : FragmentActivity() {
         // Request notification permission for Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        // Log FCM Token for Notifications
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (!task.isSuccessful) {
+                Log.w("FCM_TOKEN", "Fetching FCM registration token failed", task.exception)
+                return@addOnCompleteListener
+            }
+            val token = task.result
+            Log.d("FCM_TOKEN", "Token: $token")
+        }
+
+        // Log Installation ID for In-App Messaging
+        FirebaseInstallations.getInstance().id.addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                Log.d("MY_FID", "Installation ID: " + task.result)
+            } else {
+                Log.e("MY_FID", "Unable to get Installation ID")
+            }
         }
 
         setContent {

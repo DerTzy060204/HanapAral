@@ -1,5 +1,6 @@
 package com.example.hanaparal.ui.profile
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hanaparal.data.model.StudentProfile
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -31,7 +33,11 @@ class ProfileViewModel(
 
     // Reactive profile stream — auto-updates when Firestore changes
     val profile: StateFlow<StudentProfile?> = repository.observeProfile(userId)
-        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+        .catch { e ->
+            Log.e("ProfileViewModel", "Error observing profile: ${e.message}")
+            emit(null)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun saveProfile(profile: StudentProfile) {
         viewModelScope.launch {

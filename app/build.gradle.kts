@@ -80,6 +80,8 @@ dependencies {
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.config)
+    implementation(libs.firebase.inappmessaging.display)
+    implementation(libs.firebase.installations)
 
     // Module 3: Advanced Mobile Hardware Integration
     implementation(libs.play.services.maps)

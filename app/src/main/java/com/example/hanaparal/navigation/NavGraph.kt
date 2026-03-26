@@ -1,6 +1,7 @@
 package com.example.hanaparal.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -9,6 +10,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.example.hanaparal.auth.FirebaseAuthState
 import com.example.hanaparal.auth.GoogleAuthUiClient
 import com.example.hanaparal.ui.admin.AdminScreen
 import com.example.hanaparal.ui.dashboard.DashboardScreen
@@ -29,6 +31,15 @@ fun NavGraph(
 ) {
     val authState by authViewModel.authState.collectAsState()
     val mainViewModel: MainViewModel = viewModel()
+
+    // Handle global authentication state changes
+    LaunchedEffect(authState) {
+        if (authState is FirebaseAuthState.Unauthenticated) {
+            navController.navigate(Screen.Login.route) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
 
     val startDestination = if (googleAuthUiClient.getSignedInUser() != null) {
         Screen.Dashboard.route
@@ -62,9 +73,7 @@ fun NavGraph(
                 },
                 onNavigateToAdmin = { navController.navigate(Screen.Admin.route) },
                 onSignOut = {
-                    navController.navigate(Screen.Login.route) {
-                        popUpTo(Screen.Dashboard.route) { inclusive = true }
-                    }
+                    // Sign out is handled by the LaunchedEffect above
                 }
             )
         }

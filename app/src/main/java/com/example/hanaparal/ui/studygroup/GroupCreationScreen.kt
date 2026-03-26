@@ -26,7 +26,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.hanaparal.data.model.StudyGroup
-import com.example.hanaparal.ui.components.ErrorDialog
 import com.example.hanaparal.ui.components.LoadingOverlay
 import com.example.hanaparal.ui.components.rememberBiometricLauncher
 import com.example.hanaparal.viewmodel.GroupUiState
@@ -46,10 +45,6 @@ fun GroupCreationScreen(
     val appConfig by mainViewModel.appConfig.collectAsState()
     val context = LocalContext.current
 
-    LaunchedEffect(Unit) {
-        mainViewModel.fetchRemoteConfig()
-    }
-
     var name        by remember { mutableStateOf("") }
     var subject     by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -64,9 +59,11 @@ fun GroupCreationScreen(
     }
 
     val biometricLauncher = rememberBiometricLauncher(
+        title = "Unlock Group Creation",
+        subtitle = "Authenticate to bypass global restriction for this session",
         onSuccess = {
             isUnlocked = true
-            Toast.makeText(context, "Superuser features unlocked!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Group creation unlocked for this session!", Toast.LENGTH_SHORT).show()
         },
         onError = { _, err ->
             Toast.makeText(context, "Authentication failed: $err", Toast.LENGTH_SHORT).show()
@@ -74,11 +71,12 @@ fun GroupCreationScreen(
     )
 
     if (uiState is GroupUiState.Loading) LoadingOverlay("Creating group…")
+    
+    // Auto-reset error state if it happens (e.g. from background validation)
     if (uiState is GroupUiState.Error) {
-        ErrorDialog(
-            message = (uiState as GroupUiState.Error).message,
-            onDismiss = groupViewModel::resetState
-        )
+        LaunchedEffect(uiState) {
+            groupViewModel.resetState()
+        }
     }
 
     Scaffold(
@@ -91,7 +89,8 @@ fun GroupCreationScreen(
                     }
                 },
                 actions = {
-                    if (isSuperuser && !isUnlocked) {
+                    // Show fingerprint icon if disabled and user is superuser
+                    if (!appConfig.isGroupCreationEnabled && isSuperuser && !isUnlocked) {
                         IconButton(onClick = { biometricLauncher() }) {
                             Icon(Icons.Default.Fingerprint, contentDescription = "Unlock Admin Features", tint = MaterialTheme.colorScheme.primary)
                         }
@@ -108,22 +107,32 @@ fun GroupCreationScreen(
                 .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
             if (!appConfig.isGroupCreationEnabled && !isUnlocked) {
+                // Red box warning (Exactly like your screenshot)
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
                 ) {
-                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.width(12.dp))
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(Modifier.width(16.dp))
                         Text(
                             text = "Group creation is currently disabled by the administrator.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
             } else {
+                // Creation Form (Only shown when enabled or unlocked)
                 Text(
                     text = "Fill in the details below to start a new learning community.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -183,18 +192,20 @@ fun GroupCreationScreen(
                             description = description.trim(),
                             maxMembers = limit
                         )
-                        groupViewModel.createGroup(group, onGroupCreated)
+                        // Corrected: pass isUnlocked to bypassConfig
+                        groupViewModel.createGroup(
+                            group = group, 
+                            bypassConfig = isUnlocked, 
+                            onSuccess = onGroupCreated
+                        )
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(16.dp),
                     enabled = name.isNotBlank() && subject.isNotBlank(),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                 ) {
                     Text("Create Group", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
-
                 Spacer(Modifier.height(24.dp))
             }
         }
