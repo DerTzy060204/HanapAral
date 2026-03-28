@@ -29,18 +29,24 @@ fun ProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
     val profile by viewModel.profile.collectAsState()
 
+    val currentUser = FirebaseAuth.getInstance().currentUser
+
     // Pre-fill form fields once the profile loads from Firestore
     var name    by remember { mutableStateOf("") }
     var course  by remember { mutableStateOf("") }
     var yearLevel by remember { mutableStateOf("1") }
     var bio     by remember { mutableStateOf("") }
 
+    // Initialize fields with Google info if no Firestore profile exists yet
     LaunchedEffect(profile) {
-        profile?.let {
-            name      = it.name
-            course    = it.course
-            yearLevel = it.yearLevel.toString()
-            bio       = it.bio
+        if (profile != null) {
+            name      = profile!!.name
+            course    = profile!!.course
+            yearLevel = profile!!.yearLevel.toString()
+            bio       = profile!!.bio
+        } else if (currentUser != null && name.isEmpty()) {
+            // Initial pre-fill from Google account for new users
+            name = currentUser.displayName ?: ""
         }
     }
 
@@ -58,13 +64,13 @@ fun ProfileScreen(
         )
     }
 
-    val currentUser = FirebaseAuth.getInstance().currentUser
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Profile", fontWeight = FontWeight.SemiBold) },
+                title = { Text("Setup Your Profile", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
+                    // Only show back button if they are already authenticated
+                    // If they are forced here, onBack might just re-trigger the redirect
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
@@ -107,6 +113,13 @@ fun ProfileScreen(
             HorizontalDivider()
             Spacer(Modifier.height(24.dp))
 
+            Text(
+                "Please complete your details to continue.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            )
+
             // ── Form fields ───────────────────────────────────────────
             OutlinedTextField(
                 value = name,
@@ -114,7 +127,8 @@ fun ProfileScreen(
                 label = { Text("Full Name") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
-                singleLine = true
+                singleLine = true,
+                isError = name.isBlank()
             )
 
             Spacer(Modifier.height(12.dp))
@@ -122,9 +136,11 @@ fun ProfileScreen(
             OutlinedTextField(
                 value = course,
                 onValueChange = { course = it },
-                label = { Text("Course / Program") },
+                label = { Text("Course / Program (e.g., BSIT)") },
+                placeholder = { Text("Required") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                isError = course.isBlank()
             )
 
             Spacer(Modifier.height(12.dp))
@@ -154,29 +170,31 @@ fun ProfileScreen(
             Button(
                 onClick = {
                     val uid = currentUser?.uid ?: return@Button
-                    
-                    FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                        val token = if (task.isSuccessful) task.result else ""
-                        
-                        viewModel.saveProfile(
-                            StudentProfile(
-                                userId    = uid,
-                                name      = name.trim(),
-                                email     = currentUser.email ?: "",
-                                course    = course.trim(),
-                                yearLevel = yearLevel.toIntOrNull() ?: 1,
-                                photoUrl  = currentUser.photoUrl?.toString() ?: "",
-                                bio       = bio.trim(),
-                                fcmToken  = token
+                    if (name.isNotBlank() && course.isNotBlank()) {
+                        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                            val token = if (task.isSuccessful) task.result else ""
+
+                            viewModel.saveProfile(
+                                StudentProfile(
+                                    userId    = uid,
+                                    name      = name.trim(),
+                                    email     = currentUser.email ?: "",
+                                    course    = course.trim(),
+                                    yearLevel = yearLevel.toIntOrNull() ?: 1,
+                                    photoUrl  = currentUser.photoUrl?.toString() ?: "",
+                                    bio       = bio.trim(),
+                                    fcmToken  = token
+                                )
                             )
-                        )
+                        }
                     }
                 },
+                enabled = name.isNotBlank() && course.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
             ) {
-                Text("Save Profile", fontWeight = FontWeight.SemiBold)
+                Text("Save and Get Started", fontWeight = FontWeight.SemiBold)
             }
         }
     }
