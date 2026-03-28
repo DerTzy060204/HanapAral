@@ -30,10 +30,10 @@ class GoogleAuthUiClient(
 
     // Completes sign-in after user selects a Google account
     suspend fun signInWithIntent(intent: Intent): SignInResult {
-        val credential = oneTapClient.getSignInCredentialFromIntent(intent)
-        val googleIdToken = credential.googleIdToken
-        val googleCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
         return try {
+            val credential = oneTapClient.getSignInCredentialFromIntent(intent)
+            val googleIdToken = credential.googleIdToken
+            val googleCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
             val user = auth.signInWithCredential(googleCredential).await().user
             SignInResult(data = user?.toUserData(), errorMessage = null)
         } catch (e: Exception) {
@@ -58,12 +58,13 @@ class GoogleAuthUiClient(
             .setGoogleIdTokenRequestOptions(
                 BeginSignInRequest.GoogleIdTokenRequestOptions.builder()
                     .setSupported(true)
-                    // Replace with your actual Web client ID from google-services.json
+                    // Using the auto-generated client ID from google-services.json
                     .setServerClientId(context.getString(com.example.hanaparal.R.string.default_web_client_id))
                     .setFilterByAuthorizedAccounts(false)
                     .build()
             )
-            .setAutoSelectEnabled(true)
+            // Disabling auto-select often fixes the DUPLICATE_RAW_ID error
+            .setAutoSelectEnabled(false)
             .build()
     }
 

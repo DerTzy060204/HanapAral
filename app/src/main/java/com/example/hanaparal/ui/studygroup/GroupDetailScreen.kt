@@ -1,9 +1,11 @@
 package com.example.hanaparal.ui.studygroup
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.hanaparal.data.model.Announcement
+import com.example.hanaparal.data.model.StudentProfile
 import com.example.hanaparal.data.model.StudyGroup
 import com.example.hanaparal.ui.components.ErrorDialog
 import com.example.hanaparal.ui.components.LoadingOverlay
@@ -47,12 +50,12 @@ fun GroupDetailScreen(
     onBack: () -> Unit
 ) {
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
-    
+
     val uiState by groupViewModel.uiState.collectAsState()
     val allGroups by groupViewModel.allGroups.collectAsState()
     val appConfig by mainViewModel.appConfig.collectAsState()
     val userProfile by groupViewModel.currentUserProfile.collectAsState()
-    
+
     val group = allGroups.find { it.groupId == groupId }
 
     val announcementsFlow = remember(groupId) { groupViewModel.getAnnouncementsFlow(groupId) }
@@ -68,9 +71,10 @@ fun GroupDetailScreen(
     var showLeaveDialog  by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showEditDialog   by remember { mutableStateOf(false) }
+    var showMembersDialog by remember { mutableStateOf(false) }
 
     if (uiState is GroupUiState.Loading) LoadingOverlay("Processing...")
-    
+
     // Suppress popups for "disabled" errors, use inline UI instead
     if (uiState is GroupUiState.Error) {
         val errorMessage = (uiState as GroupUiState.Error).message
@@ -130,6 +134,14 @@ fun GroupDetailScreen(
                 groupViewModel.updateGroup(updatedGroup)
                 showEditDialog = false
             }
+        )
+    }
+
+    if (showMembersDialog && group != null) {
+        MembersListDialog(
+            group = group,
+            groupViewModel = groupViewModel,
+            onDismiss = { showMembersDialog = false }
         )
     }
 
@@ -215,7 +227,7 @@ fun GroupDetailScreen(
         ) {
             item {
                 group?.let { g ->
-                    GroupHeaderSection(g)
+                    GroupHeaderSection(g, onShowMembers = { showMembersDialog = true })
 
                     if (!isMember) {
                         JoinSection(g, appConfig.isJoiningGroupsEnabled, groupViewModel)
@@ -251,7 +263,7 @@ fun GroupDetailScreen(
 }
 
 @Composable
-private fun GroupHeaderSection(group: StudyGroup) {
+private fun GroupHeaderSection(group: StudyGroup, onShowMembers: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -307,12 +319,14 @@ private fun GroupHeaderSection(group: StudyGroup) {
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     InfoChip(
                         icon = Icons.Default.Group,
                         text = "${group.memberCount}/${group.maxMembers}",
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        onClick = onShowMembers
                     )
                     InfoChip(
                         icon = Icons.Default.Person,
@@ -326,10 +340,16 @@ private fun GroupHeaderSection(group: StudyGroup) {
 }
 
 @Composable
-private fun InfoChip(icon: ImageVector, text: String, containerColor: Color) {
+private fun InfoChip(
+    icon: ImageVector,
+    text: String,
+    containerColor: Color,
+    onClick: (() -> Unit)? = null
+) {
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = containerColor,
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -338,6 +358,10 @@ private fun InfoChip(icon: ImageVector, text: String, containerColor: Color) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Text(text, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+            if (onClick != null) {
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(14.dp))
+            }
         }
     }
 }
@@ -486,6 +510,132 @@ private fun AnnouncementCard(announcement: Announcement) {
                 style = MaterialTheme.typography.bodyMedium,
                 lineHeight = 20.sp
             )
+        }
+    }
+}
+
+@Composable
+fun MembersListDialog(
+    group: StudyGroup,
+    groupViewModel: GroupViewModel,
+    onDismiss: () -> Unit
+) {
+    val profiles by groupViewModel.observeGroupMembers(group.memberIds).collectAsState()
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Group,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(12.dp))
+                Text("Group Members (${group.memberCount})")
+            }
+        },
+        text = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+            ) {
+                if (profiles.isEmpty() && group.memberIds.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp)
+                    ) {
+                        itemsIndexed(group.memberIds) { _, memberId ->
+                            val profile = profiles.find { it.userId == memberId }
+                            MemberListItem(
+                                profile = profile,
+                                memberId = memberId,
+                                isMe = memberId == currentUserId,
+                                isAdmin = memberId == group.adminId
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+private fun MemberListItem(
+    profile: StudentProfile?,
+    memberId: String,
+    isMe: Boolean,
+    isAdmin: Boolean
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(40.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                val initial = profile?.name?.take(1)?.uppercase() ?: "?"
+                Text(
+                    text = initial,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = buildString {
+                    append(profile?.name ?: "New Student")
+                    if (isMe) append(" (You)")
+                },
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = if (profile != null) "${profile.course} - Year ${profile.yearLevel}" else "Details not set yet",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+        if (isAdmin) {
+            Surface(
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Text(
+                    "Admin",
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
         }
     }
 }

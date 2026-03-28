@@ -5,38 +5,51 @@ import androidx.lifecycle.viewModelScope
 import com.example.hanaparal.auth.FirebaseAuthState
 import com.example.hanaparal.auth.SignInResult
 import com.example.hanaparal.data.repository.AuthRepository
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import com.example.hanaparal.data.repository.FirestoreRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModel(
-    private val authRepository: AuthRepository = AuthRepository()
+    private val authRepository: AuthRepository = AuthRepository(),
+    private val firestoreRepository: FirestoreRepository = FirestoreRepository()
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<FirebaseAuthState>(FirebaseAuthState.Idle)
     val authState: StateFlow<FirebaseAuthState> = _authState.asStateFlow()
 
-    // Reflects the current sign-in state as soon as the ViewModel is created
     init {
         viewModelScope.launch {
-            authRepository.authStateFlow().collect { user ->
-                _authState.value = if (user != null) {
-                    FirebaseAuthState.Authenticated(user)
-                } else {
-                    FirebaseAuthState.Unauthenticated
+            authRepository.authStateFlow()
+                .flatMapLatest { user ->
+                    if (user == null) {
+                        flowOf(FirebaseAuthState.Unauthenticated)
+                    } else {
+                        // Observe the profile in real-time.
+                        // If it's created or updated, this flow will emit a new state.
+                        firestoreRepository.observeProfile(user.uid).map { profile ->
+                            if (profile != null && profile.name.isNotBlank() && profile.course.isNotBlank()) {
+                                FirebaseAuthState.Authenticated(user)
+                            } else {
+                                FirebaseAuthState.NeedsProfile(user)
+                            }
+                        }
+                    }
                 }
-            }
+                .collect { state ->
+                    _authState.value = state
+                }
         }
     }
 
     /** Called after the Google One-Tap flow completes to finalize sign-in. */
     fun onSignInResult(result: SignInResult) {
-        val user = authRepository.currentUser
-        _authState.value = if (result.data != null && user != null) {
-            FirebaseAuthState.Authenticated(user)
+        if (result.data == null) {
+            _authState.value = FirebaseAuthState.Error(result.errorMessage ?: "Unknown sign-in error")
         } else {
-            FirebaseAuthState.Error(result.errorMessage ?: "Unknown sign-in error")
+            // State will be updated automatically by the flatMapLatest observer above
+            _authState.value = FirebaseAuthState.Loading
         }
     }
 
