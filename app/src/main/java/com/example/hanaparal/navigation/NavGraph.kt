@@ -34,14 +34,35 @@ fun NavGraph(
 
     // Handle global authentication state changes
     LaunchedEffect(authState) {
-        if (authState is FirebaseAuthState.Unauthenticated) {
-            navController.navigate(Screen.Login.route) {
-                popUpTo(0) { inclusive = true }
+        when (authState) {
+            is FirebaseAuthState.Unauthenticated -> {
+                navController.navigate(Screen.Login.route) {
+                    popUpTo(0) { inclusive = true }
+                }
             }
+            is FirebaseAuthState.NeedsProfile -> {
+                navController.navigate(Screen.Profile.route) {
+                    // Prevent going back to login or dashboard if profile is mandatory
+                    // but allow the back button to trigger a sign out which leads back to login
+                    popUpTo(Screen.Login.route) { inclusive = true }
+                }
+            }
+            is FirebaseAuthState.Authenticated -> {
+                // If we were on Login or Profile(initial), move to Dashboard
+                val currentRoute = navController.currentDestination?.route
+                if (currentRoute == Screen.Login.route || currentRoute == Screen.Profile.route) {
+                    navController.navigate(Screen.Dashboard.route) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                }
+            }
+            else -> {}
         }
     }
 
     val startDestination = if (googleAuthUiClient.getSignedInUser() != null) {
+        // We'll let the LaunchedEffect handle the specific redirection (Dashboard vs Profile)
+        // but Dashboard is a safe initial "Authorized" area
         Screen.Dashboard.route
     } else {
         Screen.Login.route
@@ -54,9 +75,7 @@ fun NavGraph(
                 authViewModel = authViewModel,
                 googleAuthUiClient = googleAuthUiClient,
                 onLoginSuccess = {
-                    navController.navigate(Screen.Dashboard.route) {
-                        popUpTo(Screen.Login.route) { inclusive = true }
-                    }
+                    // Handled by global LaunchedEffect
                 }
             )
         }
@@ -80,7 +99,15 @@ fun NavGraph(
 
         composable(Screen.Profile.route) {
             ProfileScreen(
-                onBack = { navController.popBackStack() }
+                onBack = {
+                    if (authState is FirebaseAuthState.Authenticated) {
+                        navController.popBackStack()
+                    } else if (authState is FirebaseAuthState.NeedsProfile) {
+                        // If they are on the profile setup screen but haven't finished,
+                        // clicking back should sign them out and return to login.
+                        authViewModel.signOut()
+                    }
+                }
             )
         }
 
