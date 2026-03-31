@@ -10,12 +10,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-
 enum class NetworkStatus {
     Available, Unavailable
 }
-
-class NetworkObserver(context: Context) {
+class NetworkObservers(context: Context) {
     private val connectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
@@ -43,7 +41,6 @@ class NetworkObserver(context: Context) {
 
         connectivityManager.registerNetworkCallback(request, callback)
 
-        // Initial check
         val currentNetwork = connectivityManager.activeNetwork
         val caps = connectivityManager.getNetworkCapabilities(currentNetwork)
         val isOnline = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
