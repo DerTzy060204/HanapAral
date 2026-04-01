@@ -109,6 +109,11 @@ class FirebaseFirestoreDataSource {
             .collection("announcements").add(announcement).await()
     }
 
+    suspend fun deleteAnnouncement(groupId: String, announcementId: String) {
+        db.collection("groups").document(groupId)
+            .collection("announcements").document(announcementId).delete().await()
+    }
+
     fun observeAnnouncements(groupId: String): Flow<List<Announcement>> = callbackFlow {
         val listener = db.collection("groups").document(groupId)
             .collection("announcements")

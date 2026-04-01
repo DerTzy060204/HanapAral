@@ -253,7 +253,11 @@ fun GroupDetailScreen(
                 }
             } else {
                 items(announcements, key = { it.announcementId }) { announcement ->
-                    AnnouncementCard(announcement)
+                    AnnouncementCard(
+                        announcement = announcement,
+                        isAuthor = announcement.authorId == currentUserId,
+                        onDelete = { groupViewModel.deleteAnnouncement(announcement) }
+                    )
                 }
             }
 
@@ -454,8 +458,34 @@ private fun EmptyAnnouncementsState() {
 }
 
 @Composable
-private fun AnnouncementCard(announcement: Announcement) {
+private fun AnnouncementCard(
+    announcement: Announcement,
+    isAuthor: Boolean,
+    onDelete: () -> Unit
+) {
     val dateFormat = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Announcement?") },
+            text = { Text("Are you sure you want to delete this announcement?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete()
+                    showDeleteConfirm = false
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Card(
         modifier = Modifier
@@ -498,6 +528,17 @@ private fun AnnouncementCard(announcement: Announcement) {
                             text = dateFormat.format(it),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+                
+                if (isAuthor) {
+                    IconButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete Announcement",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
