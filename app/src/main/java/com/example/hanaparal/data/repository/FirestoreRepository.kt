@@ -96,6 +96,15 @@ class FirestoreRepository(
         }
     }
 
+    suspend fun deleteAnnouncement(groupId: String, announcementId: String): Result<Unit> {
+        return try {
+            dataSource.deleteAnnouncement(groupId, announcementId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun observeAnnouncements(groupId: String): Flow<List<Announcement>> =
         dataSource.observeAnnouncements(groupId)
 

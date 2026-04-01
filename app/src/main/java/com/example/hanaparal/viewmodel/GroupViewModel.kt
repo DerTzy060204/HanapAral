@@ -198,5 +198,11 @@ class GroupViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.postAnnouncement(announcement) }
     }
 
+    fun deleteAnnouncement(announcement: Announcement) {
+        viewModelScope.launch {
+            repository.deleteAnnouncement(announcement.groupId, announcement.announcementId)
+        }
+    }
+
     fun resetState() { _uiState.value = GroupUiState.Idle }
 }

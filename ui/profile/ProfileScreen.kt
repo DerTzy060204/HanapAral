@@ -45,13 +45,16 @@ fun ProfileScreen(
             yearLevel = profile!!.yearLevel.toString()
             bio       = profile!!.bio
         } else if (currentUser != null && name.isEmpty()) {
+            // Initial pre-fill from Google account for new users
             name = currentUser.displayName ?: ""
         }
     }
 
-    // We don't call onBack() here anymore. 
-    // The NavGraph observes AuthViewModel and will navigate to Dashboard 
-    // automatically once the profile is saved and detected by Firestore.
+    LaunchedEffect(uiState) {
+        if (uiState is ProfileUiState.Saved) {
+            onBack()
+        }
+    }
 
     if (uiState is ProfileUiState.Loading) LoadingOverlay("Saving profile…")
     if (uiState is ProfileUiState.Error) {
@@ -64,8 +67,10 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Setup Your Profile", fontWeight = FontWeight.SemiBold) },
+                title = { Text("My Profile", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
+                    // Only show back button if they are already authenticated (not forced here)
+                    // We can check if it's safe to go back later or just show it anyway.
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
@@ -81,6 +86,7 @@ fun ProfileScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Avatar placeholder with initials
             Surface(
                 shape = MaterialTheme.shapes.extraLarge,
                 color = MaterialTheme.colorScheme.primaryContainer,
@@ -88,7 +94,7 @@ fun ProfileScreen(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
-                        text = (currentUser?.email?.take(1) ?: "?").uppercase(),
+                        text = (currentUser?.displayName?.take(1) ?: "?").uppercase(),
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -107,13 +113,7 @@ fun ProfileScreen(
             HorizontalDivider()
             Spacer(Modifier.height(24.dp))
 
-            Text(
-                "Please complete your details to continue.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-            )
-
+            // ── Form fields ───────────────────────────────────────────
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -123,17 +123,23 @@ fun ProfileScreen(
                 singleLine = true,
                 isError = name.isBlank()
             )
+            if (name.isBlank()) {
+                Text("Name is required", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+            }
 
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(
                 value = course,
                 onValueChange = { course = it },
-                label = { Text("Course / Program (e.g., BSIT)") },
+                label = { Text("Course / Program") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = course.isBlank()
             )
+            if (course.isBlank()) {
+                Text("Course is required", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+            }
 
             Spacer(Modifier.height(12.dp))
 
@@ -165,7 +171,7 @@ fun ProfileScreen(
                     if (name.isNotBlank() && course.isNotBlank()) {
                         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                             val token = if (task.isSuccessful) task.result else ""
-
+                            
                             viewModel.saveProfile(
                                 StudentProfile(
                                     userId    = uid,
@@ -186,7 +192,7 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .height(52.dp)
             ) {
-                Text("Save and Get Started", fontWeight = FontWeight.SemiBold)
+                Text("Save and Continue", fontWeight = FontWeight.SemiBold)
             }
         }
     }
