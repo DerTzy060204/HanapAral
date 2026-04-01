@@ -30,7 +30,7 @@ class GroupViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: FirestoreRepository = FirestoreRepository()
     private val auth = FirebaseAuth.getInstance()
-    
+
     private var currentAppConfig = AppConfig()
 
     private val _userIdFlow = MutableStateFlow(auth.currentUser?.uid ?: "")
@@ -39,9 +39,9 @@ class GroupViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<GroupUiState> = _uiState.asStateFlow()
 
     val allGroups: StateFlow<List<StudyGroup>> = repository.observeAllGroups()
-        .catch { e -> 
+        .catch { e ->
             Log.e("GroupViewModel", "Error observing all groups: ${e.message}")
-            emit(emptyList()) 
+            emit(emptyList())
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -65,7 +65,7 @@ class GroupViewModel(application: Application) : AndroidViewModel(application) {
         auth.addAuthStateListener { firebaseAuth ->
             _userIdFlow.value = firebaseAuth.currentUser?.uid ?: ""
         }
-        
+
         viewModelScope.launch {
             repository.observeAppConfig()
                 .catch { e -> Log.e("GroupViewModel", "Error observing config: ${e.message}") }
@@ -86,10 +86,10 @@ class GroupViewModel(application: Application) : AndroidViewModel(application) {
         val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
             _uiState.value = GroupUiState.Loading
-            
+
             // Get user's name for the notification
             val userName = currentUserProfile.value?.name ?: auth.currentUser?.displayName ?: "Student"
-            
+
             repository.joinGroup(groupId, uid).fold(
                 onSuccess = {
                     FirebaseMessaging.getInstance().subscribeToTopic("group_$groupId")
@@ -186,6 +186,11 @@ class GroupViewModel(application: Application) : AndroidViewModel(application) {
 
     fun getAnnouncementsFlow(groupId: String): StateFlow<List<Announcement>> =
         repository.observeAnnouncements(groupId)
+            .catch { emit(emptyList()) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun observeGroupMembers(memberIds: List<String>): StateFlow<List<StudentProfile>> =
+        repository.observeMembers(memberIds)
             .catch { emit(emptyList()) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
