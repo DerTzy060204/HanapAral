@@ -45,16 +45,13 @@ fun ProfileScreen(
             yearLevel = profile!!.yearLevel.toString()
             bio       = profile!!.bio
         } else if (currentUser != null && name.isEmpty()) {
-            // Initial pre-fill from Google account for new users
             name = currentUser.displayName ?: ""
         }
     }
 
-    LaunchedEffect(uiState) {
-        if (uiState is ProfileUiState.Saved) {
-            onBack()
-        }
-    }
+    // We don't call onBack() here anymore. 
+    // The NavGraph observes AuthViewModel and will navigate to Dashboard 
+    // automatically once the profile is saved and detected by Firestore.
 
     if (uiState is ProfileUiState.Loading) LoadingOverlay("Saving profile…")
     if (uiState is ProfileUiState.Error) {
@@ -69,8 +66,6 @@ fun ProfileScreen(
             TopAppBar(
                 title = { Text("Setup Your Profile", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
-                    // Only show back button if they are already authenticated
-                    // If they are forced here, onBack might just re-trigger the redirect
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
@@ -86,7 +81,6 @@ fun ProfileScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Avatar placeholder with initials
             Surface(
                 shape = MaterialTheme.shapes.extraLarge,
                 color = MaterialTheme.colorScheme.primaryContainer,
@@ -94,7 +88,7 @@ fun ProfileScreen(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
-                        text = (currentUser?.displayName?.take(1) ?: "?").uppercase(),
+                        text = (currentUser?.email?.take(1) ?: "?").uppercase(),
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -120,7 +114,6 @@ fun ProfileScreen(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
             )
 
-            // ── Form fields ───────────────────────────────────────────
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -137,7 +130,6 @@ fun ProfileScreen(
                 value = course,
                 onValueChange = { course = it },
                 label = { Text("Course / Program (e.g., BSIT)") },
-                placeholder = { Text("Required") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = course.isBlank()

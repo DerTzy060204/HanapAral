@@ -3,6 +3,7 @@ package com.example.hanaparal.navigation
 sealed class Screen(val route: String) {
     // Auth
     object Login : Screen("login")
+    object CreateAccount : Screen("create_account")
 
     // Main app
     object Dashboard : Screen("dashboard")

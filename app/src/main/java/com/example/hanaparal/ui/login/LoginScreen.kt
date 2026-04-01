@@ -5,13 +5,24 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,22 +36,26 @@ import kotlinx.coroutines.launch
 fun LoginScreen(
     authViewModel: AuthViewModel,
     googleAuthUiClient: GoogleAuthUiClient,
+    onNavigateToCreateAccount: () -> Unit,
     onLoginSuccess: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val authState by authViewModel.authState.collectAsState()
 
-    // Navigate away as soon as auth succeeds
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+
     LaunchedEffect(authState) {
         if (authState is FirebaseAuthState.Authenticated) onLoginSuccess()
         if (authState is FirebaseAuthState.Error) {
-            Toast.makeText(context, (authState as FirebaseAuthState.Error).message, Toast.LENGTH_LONG).show()
+            val message = (authState as FirebaseAuthState.Error).message
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
             authViewModel.resetState()
         }
     }
 
-    // Launcher that receives the result from Google's One-Tap sign-in UI
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
@@ -57,31 +72,96 @@ fun LoginScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // ── Branding ──────────────────────────────────────────────────
         Text(
             text = "HanapAral",
             style = MaterialTheme.typography.displayLarge.copy(
                 fontWeight = FontWeight.Bold,
-                fontSize = 48.sp
+                fontSize = 42.sp
             ),
             color = MaterialTheme.colorScheme.primary
         )
-        Spacer(Modifier.height(8.dp))
         Text(
-            text = "Find your study group.\nLearn together.",
-            style = MaterialTheme.typography.bodyLarge,
+            text = "Find your study group. Learn together.",
+            style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(Modifier.height(64.dp))
+        Spacer(Modifier.height(48.dp))
 
-        // ── Google Sign-In button ─────────────────────────────────────
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { Text("Email Address") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            singleLine = true
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Password") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        contentDescription = null
+                    )
+                }
+            },
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            singleLine = true
+        )
+
+        Spacer(Modifier.height(24.dp))
+
         Button(
+            onClick = {
+                if (email.isBlank() || password.isBlank()) {
+                    Toast.makeText(context, "Please fill in all fields", Toast.LENGTH_SHORT).show()
+                } else {
+                    authViewModel.signInWithEmail(email, password)
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text("Login", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        TextButton(onClick = onNavigateToCreateAccount) {
+            Text("New here? Create an account", color = MaterialTheme.colorScheme.primary)
+        }
+
+        Spacer(Modifier.height(32.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            HorizontalDivider(modifier = Modifier.weight(1f))
+            Text(" OR ", modifier = Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelMedium)
+            HorizontalDivider(modifier = Modifier.weight(1f))
+        }
+
+        Spacer(Modifier.height(32.dp))
+
+        OutlinedButton(
             onClick = {
                 scope.launch {
                     val intentSender = googleAuthUiClient.signIn()
@@ -90,28 +170,10 @@ fun LoginScreen(
                     }
                 }
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            )
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(12.dp)
         ) {
-            Text(
-                text = "Continue with Google",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
-            )
+            Text("Continue with Google", fontWeight = FontWeight.SemiBold)
         }
-
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            text = "By continuing, you agree to our Terms of Service.",
-            style = MaterialTheme.typography.labelMedium,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.outline
-        )
     }
 }

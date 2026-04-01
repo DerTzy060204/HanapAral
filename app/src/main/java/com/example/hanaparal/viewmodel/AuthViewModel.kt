@@ -1,5 +1,6 @@
 package com.example.hanaparal.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hanaparal.auth.FirebaseAuthState
@@ -23,18 +24,25 @@ class AuthViewModel(
         viewModelScope.launch {
             authRepository.authStateFlow()
                 .flatMapLatest { user ->
+                    Log.d("AuthViewModel", "Auth change detected: User=${user?.uid}")
                     if (user == null) {
                         flowOf(FirebaseAuthState.Unauthenticated)
                     } else {
-                        // Observe the profile in real-time.
-                        // If it's created or updated, this flow will emit a new state.
-                        firestoreRepository.observeProfile(user.uid).map { profile ->
-                            if (profile != null && profile.name.isNotBlank() && profile.course.isNotBlank()) {
-                                FirebaseAuthState.Authenticated(user)
-                            } else {
-                                FirebaseAuthState.NeedsProfile(user)
+                        // Immediately check for profile to avoid "Authenticated" flicker
+                        firestoreRepository.observeProfile(user.uid)
+                            .map { profile ->
+                                if (profile != null && profile.name.isNotBlank() && profile.course.isNotBlank()) {
+                                    Log.d("AuthViewModel", "Profile found: Authenticated")
+                                    FirebaseAuthState.Authenticated(user)
+                                } else {
+                                    Log.d("AuthViewModel", "Profile missing: NeedsProfile")
+                                    FirebaseAuthState.NeedsProfile(user)
+                                }
                             }
-                        }
+                            .catch { e ->
+                                Log.e("AuthViewModel", "Profile check failed: ${e.message}")
+                                emit(FirebaseAuthState.NeedsProfile(user))
+                            }
                     }
                 }
                 .collect { state ->
@@ -43,13 +51,29 @@ class AuthViewModel(
         }
     }
 
-    /** Called after the Google One-Tap flow completes to finalize sign-in. */
     fun onSignInResult(result: SignInResult) {
         if (result.data == null) {
-            _authState.value = FirebaseAuthState.Error(result.errorMessage ?: "Unknown sign-in error")
+            _authState.value = FirebaseAuthState.Error(result.errorMessage ?: "Sign-in failed")
         } else {
-            // State will be updated automatically by the flatMapLatest observer above
             _authState.value = FirebaseAuthState.Loading
+        }
+    }
+
+    fun signInWithEmail(email: String, password: String) {
+        viewModelScope.launch {
+            _authState.value = FirebaseAuthState.Loading
+            authRepository.signInWithEmail(email, password).onFailure { e ->
+                _authState.value = FirebaseAuthState.Error(e.message ?: "Login failed")
+            }
+        }
+    }
+
+    fun signUpWithEmail(email: String, password: String) {
+        viewModelScope.launch {
+            _authState.value = FirebaseAuthState.Loading
+            authRepository.signUpWithEmail(email, password).onFailure { e ->
+                _authState.value = FirebaseAuthState.Error(e.message ?: "Registration failed")
+            }
         }
     }
 
@@ -59,7 +83,5 @@ class AuthViewModel(
         onSignOutComplete()
     }
 
-    fun resetState() {
-        _authState.value = FirebaseAuthState.Idle
-    }
+    fun resetState() { _authState.value = FirebaseAuthState.Idle }
 }
