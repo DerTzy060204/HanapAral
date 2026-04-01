@@ -1,6 +1,8 @@
 package com.example.hanaparal.navigation
 
+import android.util.Log
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -9,9 +11,11 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.example.hanaparal.auth.FirebaseAuthState
 import com.example.hanaparal.auth.GoogleAuthUiClient
 import com.example.hanaparal.ui.admin.AdminScreen
 import com.example.hanaparal.ui.dashboard.DashboardScreen
+import com.example.hanaparal.ui.login.CreateAccountScreen
 import com.example.hanaparal.ui.login.LoginScreen
 import com.example.hanaparal.ui.profile.ProfileScreen
 import com.example.hanaparal.ui.studygroup.GroupCreationScreen
@@ -30,23 +34,69 @@ fun NavGraph(
     val authState by authViewModel.authState.collectAsState()
     val mainViewModel: MainViewModel = viewModel()
 
+    // Handle global authentication state changes
+    LaunchedEffect(authState) {
+        val currentDestination = navController.currentDestination?.route
+        Log.d("NavGraph", "AuthState updated: ${authState::class.simpleName} | Current destination: $currentDestination")
+
+        when (authState) {
+            is FirebaseAuthState.Unauthenticated -> {
+                if (currentDestination != Screen.Login.route && currentDestination != Screen.CreateAccount.route) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+            is FirebaseAuthState.NeedsProfile -> {
+                if (currentDestination != Screen.Profile.route) {
+                    navController.navigate(Screen.Profile.route) {
+                        popUpTo(0) { inclusive = true } // Clear everything to ensure a clean transition
+                    }
+                }
+            }
+            is FirebaseAuthState.Authenticated -> {
+                // If we're on a setup or login screen, go to dashboard
+                if (currentDestination == Screen.Login.route || 
+                    currentDestination == Screen.CreateAccount.route || 
+                    currentDestination == Screen.Profile.route ||
+                    currentDestination == null) {
+                    navController.navigate(Screen.Dashboard.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+            else -> {}
+        }
+    }
+
+    // Determine initial route
     val startDestination = if (googleAuthUiClient.getSignedInUser() != null) {
-        Screen.Dashboard.route
+        // We start at Dashboard but LaunchedEffect will redirect to Profile if needed
+        Screen.Dashboard.route 
     } else {
         Screen.Login.route
     }
 
-    NavHost(navController = navController, startDestination = startDestination) {
-
+    NavHost(
+        navController = navController, 
+        startDestination = startDestination
+    ) {
         composable(Screen.Login.route) {
             LoginScreen(
                 authViewModel = authViewModel,
                 googleAuthUiClient = googleAuthUiClient,
-                onLoginSuccess = {
-                    navController.navigate(Screen.Dashboard.route) {
-                        popUpTo(Screen.Login.route) { inclusive = true }
-                    }
-                }
+                onNavigateToCreateAccount = {
+                    navController.navigate(Screen.CreateAccount.route)
+                },
+                onLoginSuccess = { /* Handled by LaunchedEffect */ }
+            )
+        }
+
+        composable(Screen.CreateAccount.route) {
+            CreateAccountScreen(
+                authViewModel = authViewModel,
+                onBack = { navController.popBackStack() },
+                onSuccess = { /* Handled by LaunchedEffect */ }
             )
         }
 
@@ -61,17 +111,19 @@ fun NavGraph(
                     navController.navigate(Screen.GroupDetail.createRoute(groupId))
                 },
                 onNavigateToAdmin = { navController.navigate(Screen.Admin.route) },
-                onSignOut = {
-                    navController.navigate(Screen.Login.route) {
-                        popUpTo(Screen.Dashboard.route) { inclusive = true }
-                    }
-                }
+                onSignOut = { /* Handled by LaunchedEffect */ }
             )
         }
 
         composable(Screen.Profile.route) {
             ProfileScreen(
-                onBack = { navController.popBackStack() }
+                onBack = {
+                    if (authState is FirebaseAuthState.Authenticated) {
+                        navController.popBackStack()
+                    } else {
+                        authViewModel.signOut()
+                    }
+                }
             )
         }
 

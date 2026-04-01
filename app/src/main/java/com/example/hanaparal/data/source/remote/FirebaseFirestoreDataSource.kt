@@ -4,12 +4,14 @@ import com.example.hanaparal.data.model.Announcement
 import com.example.hanaparal.data.model.StudentProfile
 import com.example.hanaparal.data.model.StudyGroup
 import com.example.hanaparal.viewmodel.AppConfig
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.tasks.await
 
 class FirebaseFirestoreDataSource {
@@ -33,6 +35,23 @@ class FirebaseFirestoreDataSource {
             trySend(snapshot?.toObject(StudentProfile::class.java))
         }
         awaitClose { listener.remove() }
+    }
+
+    fun observeMembers(memberIds: List<String>): Flow<List<StudentProfile>> {
+        if (memberIds.isEmpty()) return flowOf(emptyList())
+
+        return callbackFlow {
+            // Firestore whereIn limit is typically 10 for older versions or 30 for newer ones.
+            // StudyGroup has maxMembers: Int = 10, so this is safe.
+            val listener = db.collection("users")
+                .whereIn(FieldPath.documentId(), memberIds)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) { close(error); return@addSnapshotListener }
+                    val profiles = snapshot?.toObjects(StudentProfile::class.java) ?: emptyList()
+                    trySend(profiles)
+                }
+            awaitClose { listener.remove() }
+        }
     }
 
     // ──────────────────────────── Study Groups ─────────────────────────
@@ -88,6 +107,11 @@ class FirebaseFirestoreDataSource {
     suspend fun postAnnouncement(announcement: Announcement) {
         db.collection("groups").document(announcement.groupId)
             .collection("announcements").add(announcement).await()
+    }
+
+    suspend fun deleteAnnouncement(groupId: String, announcementId: String) {
+        db.collection("groups").document(groupId)
+            .collection("announcements").document(announcementId).delete().await()
     }
 
     fun observeAnnouncements(groupId: String): Flow<List<Announcement>> = callbackFlow {

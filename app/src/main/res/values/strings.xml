@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">HanapAral</string>
+    <!-- Authentication Web Client ID -->
+    <string name="default_web_client_id">92041943062-eu85tviqpjngsdq8hu5a37ke3anpmdji.apps.googleusercontent.com</string>
 </resources>

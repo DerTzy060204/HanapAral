@@ -32,6 +32,9 @@ class FirestoreRepository(
     fun observeProfile(userId: String): Flow<StudentProfile?> =
         dataSource.observeProfile(userId)
 
+    fun observeMembers(memberIds: List<String>): Flow<List<StudentProfile>> =
+        dataSource.observeMembers(memberIds)
+
     // ── Study Groups ─────────────────────────────────────────────────────
 
     suspend fun createGroup(group: StudyGroup): Result<String> {
@@ -44,8 +47,7 @@ class FirestoreRepository(
 
     suspend fun updateGroup(group: StudyGroup): Result<Unit> {
         return try {
-            dataSource.updateGroup(group)
-            Result.success(Unit)
+            Result.success(dataSource.updateGroup(group))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -88,6 +90,15 @@ class FirestoreRepository(
     suspend fun postAnnouncement(announcement: Announcement): Result<Unit> {
         return try {
             dataSource.postAnnouncement(announcement)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteAnnouncement(groupId: String, announcementId: String): Result<Unit> {
+        return try {
+            dataSource.deleteAnnouncement(groupId, announcementId)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
