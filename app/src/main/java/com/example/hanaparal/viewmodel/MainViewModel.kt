@@ -1,8 +1,11 @@
 package com.example.hanaparal.viewmodel
 
+import android.app.Application
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.hanaparal.data.NetworkObservers
+import com.example.hanaparal.data.NetworkStatus
 import com.example.hanaparal.data.repository.FirestoreRepository
 import com.example.hanaparal.data.repository.RemoteConfigRepository
 import com.google.firebase.firestore.PropertyName
@@ -36,10 +39,19 @@ data class AppConfig(
     var superuserEmails: List<String> = emptyList()
 )
 
-class MainViewModel(
+class MainViewModel @JvmOverloads constructor(
+    application: Application,
     private val remoteConfigRepository: RemoteConfigRepository = RemoteConfigRepository(),
     private val firestoreRepository: FirestoreRepository = FirestoreRepository()
-) : ViewModel() {
+) : AndroidViewModel(application) {
+
+    private val networkObservers = NetworkObservers(application)
+    val networkStatus: StateFlow<NetworkStatus> = networkObservers.networkStatus
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = NetworkStatus.Available
+        )
 
     private val _remoteConfig = MutableStateFlow(AppConfig())
     private val _firestoreConfig = MutableStateFlow<AppConfig?>(null)
@@ -104,13 +116,13 @@ class MainViewModel(
     fun updateConfig(newConfig: AppConfig, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch {
             firestoreRepository.updateAppConfig(newConfig).fold(
-                onSuccess = { 
+                onSuccess = {
                     Log.d("MainViewModel", "Successfully updated config in Firestore")
-                    onComplete(true) 
+                    onComplete(true)
                 },
-                onFailure = { 
+                onFailure = {
                     Log.e("MainViewModel", "Update failed: ${it.message}")
-                    onComplete(false) 
+                    onComplete(false)
                 }
             )
         }

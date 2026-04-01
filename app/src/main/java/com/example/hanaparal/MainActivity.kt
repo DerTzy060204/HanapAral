@@ -7,18 +7,32 @@ import android.util.Log
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
 import com.example.hanaparal.auth.GoogleAuthUiClient
+import com.example.hanaparal.data.NetworkStatus
 import com.example.hanaparal.navigation.NavGraph
+import com.example.hanaparal.ui.components.OfflineBlockingDialog
 import com.example.hanaparal.ui.theme.HanapAralTheme
 import com.example.hanaparal.viewmodel.AuthViewModel
 import com.example.hanaparal.viewmodel.MainViewModel
@@ -73,18 +87,28 @@ class MainActivity : FragmentActivity() {
                 val authViewModel: AuthViewModel = viewModel()
 
                 val isLoading by mainViewModel.isLoading.collectAsState()
+                val networkStatus by mainViewModel.networkStatus.collectAsState()
 
-                if (isLoading) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                // Blocking Dialog when offline
+                if (networkStatus == NetworkStatus.Unavailable) {
+                    OfflineBlockingDialog()
+                }
+
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (isLoading) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    } else {
+                        val navController = rememberNavController()
+                        Box(modifier = Modifier.weight(1f)) {
+                            NavGraph(
+                                navController       = navController,
+                                authViewModel       = authViewModel,
+                                googleAuthUiClient  = googleAuthUiClient
+                            )
+                        }
                     }
-                } else {
-                    val navController = rememberNavController()
-                    NavGraph(
-                        navController       = navController,
-                        authViewModel       = authViewModel,
-                        googleAuthUiClient  = googleAuthUiClient
-                    )
                 }
             }
         }
