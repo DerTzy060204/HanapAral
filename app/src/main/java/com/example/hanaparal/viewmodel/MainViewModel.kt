@@ -34,6 +34,18 @@ data class AppConfig(
     @set:PropertyName("is_joining_groups_enabled")
     var isJoiningGroupsEnabled: Boolean = true,
 
+    @get:PropertyName("enable_biometric")
+    @set:PropertyName("enable_biometric")
+    var isBiometricEnabled: Boolean = true,
+
+    @get:PropertyName("maintenance_mode")
+    @set:PropertyName("maintenance_mode")
+    var isMaintenanceMode: Boolean = false,
+
+    @get:PropertyName("featured_subject")
+    @set:PropertyName("featured_subject")
+    var featuredSubject: String = "General",
+
     @get:PropertyName("superuser_emails")
     @set:PropertyName("superuser_emails")
     var superuserEmails: List<String> = emptyList()
@@ -57,9 +69,22 @@ class MainViewModel @JvmOverloads constructor(
     private val _firestoreConfig = MutableStateFlow<AppConfig?>(null)
 
     // Combine Remote Config (defaults) with Firestore (real-time overrides)
-    // Firestore always wins if a value is present.
+    // Firestore always wins if a value is present, but permissions are combined using AND.
     val appConfig: StateFlow<AppConfig> = combine(_remoteConfig, _firestoreConfig) { rc, fs ->
-        fs ?: rc
+        if (fs == null) return@combine rc
+        
+        AppConfig(
+            globalAnnouncementHeader = fs.globalAnnouncementHeader,
+            maxMembersPerGroup = fs.maxMembersPerGroup,
+            // Permission Logic: Both Remote Config AND Firestore must be true
+            isGroupCreationEnabled = rc.isGroupCreationEnabled && fs.isGroupCreationEnabled,
+            isJoiningGroupsEnabled = rc.isJoiningGroupsEnabled && fs.isJoiningGroupsEnabled,
+            isBiometricEnabled = rc.isBiometricEnabled && fs.isBiometricEnabled,
+            // Maintenance logic: Either one can trigger it
+            isMaintenanceMode = rc.isMaintenanceMode || fs.isMaintenanceMode,
+            featuredSubject = fs.featuredSubject,
+            superuserEmails = (rc.superuserEmails + fs.superuserEmails).distinct()
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
@@ -75,6 +100,12 @@ class MainViewModel @JvmOverloads constructor(
 
         // 2. Start observing Firestore for overrides (sets real-time values)
         observeFirestoreConfig()
+
+        // 3. Set up Real-time Remote Config listener
+        remoteConfigRepository.setRealTimeUpdateListener {
+            Log.d("MainViewModel", "Real-time update received from Remote Config")
+            fetchRemoteConfig(showLoading = false)
+        }
     }
 
     private fun observeFirestoreConfig() {
@@ -98,10 +129,13 @@ class MainViewModel @JvmOverloads constructor(
             try {
                 remoteConfigRepository.fetchAndActivate()
                 _remoteConfig.value = AppConfig(
-                    globalAnnouncementHeader = remoteConfigRepository.getGlobalAnnouncementHeader(),
-                    maxMembersPerGroup = remoteConfigRepository.getMaxMembersPerGroup(),
+                    globalAnnouncementHeader = remoteConfigRepository.getWelcomeMessage(),
+                    maxMembersPerGroup = remoteConfigRepository.getMaxGroupSize(),
                     isGroupCreationEnabled = remoteConfigRepository.isGroupCreationEnabled(),
                     isJoiningGroupsEnabled = remoteConfigRepository.isJoiningGroupsEnabled(),
+                    isBiometricEnabled = remoteConfigRepository.isBiometricEnabled(),
+                    isMaintenanceMode = remoteConfigRepository.isMaintenanceMode(),
+                    featuredSubject = remoteConfigRepository.getFeaturedSubject(),
                     superuserEmails = remoteConfigRepository.getSuperuserEmails()
                 )
                 Log.d("MainViewModel", "Remote Config base updated: ${_remoteConfig.value}")
