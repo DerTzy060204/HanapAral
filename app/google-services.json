@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "92041943062",
+    "firebase_url": "https://hanaparal-85c28-default-rtdb.firebaseio.com",
     "project_id": "hanaparal-85c28",
     "storage_bucket": "hanaparal-85c28.firebasestorage.app"
   },
@@ -19,6 +20,14 @@
           "android_info": {
             "package_name": "com.example.hanaparal",
             "certificate_hash": "a4e0c01823e2e467ecf6fa9dc4e09023fa03ae55"
+          }
+        },
+        {
+          "client_id": "92041943062-vl8vc7jv5bgq2f316b98ldqejbfe9g6v.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.hanaparal",
+            "certificate_hash": "38b39e8243b424a9b98e99f1a19d18cbcf4e7065"
           }
         },
         {
